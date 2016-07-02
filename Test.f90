@@ -227,7 +227,6 @@ contains
         if (rc .NE. ESMF_Success) then
             localPet = 0
             petCount = 1
-            print *, "shit"
         end if
 
         open(unit=1014, file=vtu_filename, form='FORMATTED', &
@@ -585,6 +584,8 @@ program main
     call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh)
     call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
     call create_parallel_esmf_mesh_from_meshdata(dst_data, dst_mesh)
+    call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
+    call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
 
     if (localPet == 0) then
         call extract_global_data_from_fort14("coarse/fort.14", global_src_data)
@@ -592,9 +593,6 @@ program main
         call extract_global_data_from_fort14("fine/fort.14", global_dst_data)
         call write_meshdata_to_vtu(global_dst_data, "fine/global_mesh.vtu", .false.)
     end if
-
-    call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
-    call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
 
     allocate(mask_creator(src_data%NumOwnedNd))
     mask_creator = 1.d0
@@ -609,32 +607,6 @@ program main
         routehandle=mapped_route_handle, rc=rc)
     call ESMF_FieldGet(dst_mask_field, farrayPtr=dst_maskptr, rc=rc)
 
-    !allocate(int_dst_mask1(dst_data%NumND))
-    !allocate(int_dst_mask0(dst_data%NumND))
-    !int_dst_mask0 = 0
-    !int_dst_mask1 = 1
-    !j1 = 0
-    !do i1 = 1, dst_data%NumNd, 1
-    !    if (dst_data%NdOwners(i1)+1 == localPet) then
-    !        j1 = j1 + 1
-    !        if (abs(dst_maskptr(j1)) < 1.d-8) then
-    !            int_dst_mask1(i1) = 0
-    !        else
-    !            int_dst_mask0(i1) = 1
-    !        end if
-    !    end if
-    !end do
-
-    !call ESMF_MeshDestroy(dst_mesh)
-    !call create_masked_esmf_mesh_from_data(dst_data, int_dst_mask1, dst_mesh)
-
-    !call gather_datafield_on_root(vm1, dst_maskptr, 0, global_dst_data%NumNd, &
-    !    global_datafield)
-
-    !if (localPet == 0) then
-    !    call write_node_field_to_vtu(global_datafield, "mask", "fine/global_mesh.vtu", .false.)
-    !end if
-
     allocate(src_field_array(src_data%NumOwnedND))
     do i1 = 1, src_data%NumOwnedNd, 1
         src_field_array(i1) = src_data%bathymetry(src_data%owned_to_present_nodes(i1))
@@ -644,10 +616,6 @@ program main
     dst_mapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
     dst_unmapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
 
-    !call ESMF_FieldRegridStore(srcField=src_field, dstField=dst_mapped_field, &
-    !    unmappedaction=ESMF_UNMAPPEDACTION_ERROR, &
-    !    routeHandle=mapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
-    !    dstMaskValues=(/0/), rc=rc)
     call ESMF_FieldRegridStore(srcField=src_field, dstField=dst_mapped_field, &
         unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
         routeHandle=mapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
@@ -678,7 +646,6 @@ program main
 
     call gather_datafield_on_root(vm1, mapped_field_ptr, 0, global_dst_data%NumNd, &
         global_datafield)
-
     if (localPet == 0) then
         call write_node_field_to_vtu(global_datafield, "interp_bath", "fine/global_mesh.vtu", .true.)
     end if

@@ -7,45 +7,46 @@ module ADCIRC_interpolation
     use MPI
 
     !> \author Ali Samii - 2016
-    !! \brief This object stores the data required for construction an ESMF mesh from
-    !! <tt>fort.14, fort.18, partmesh.txt</tt> files.
+    !! \brief This object stores the data required for construction of a parallel or serial
+    !! ESMF_Mesh from <tt>fort.14, fort.18, partmesh.txt</tt> files.
     !!
     type meshdata
-        !> vm is an ESMF_VM object.  ESMF_VM is just an ESMF virtual machine class,
+        !> \details vm is an ESMF_VM object.  ESMF_VM is just an ESMF virtual machine class,
         !! which we will use to get the data about the local PE and PE count.
         type(ESMF_VM)                      :: vm
-        !> This array contains the node coordinates of the mesh. For
+        !> \details This array contains the node coordinates of the mesh. For
         !! example, in a 2D mesh, the \c jth coordinate of the \c nth node
         !! is stored in location <tt> 2*(n-1)+j</tt> of this array.
         real(ESMF_KIND_R8), allocatable    :: NdCoords(:)
-        !> This array contains the elevation of different nodes of the mesh
+        !> \details This array contains the elevation of different nodes of the mesh
         real(ESMF_KIND_R8), allocatable    :: bathymetry(:)
-        !> Number of nodes present in the current PE. This is different from the
+        !> \details Number of nodes present in the current PE. This is different from the
         !! number of nodes owned by this PE (cf. NumOwnedNd)
         integer(ESMF_KIND_I4)              :: NumNd
-        !> Number of nodes owned by this PE. This is different from the number of
+        !> \details Number of nodes owned by this PE. This is different from the number of
         !! nodes present in the current PE (cf. NumNd)
         integer(ESMF_KIND_I4)              :: NumOwnedNd
-        !> Number of elements in the current PE. This includes ghost elements and
+        !> \details Number of elements in the current PE. This includes ghost elements and
         !! owned elements. However, we do not bother to distinguish between owned
         !! element and present element (as we did for the nodes).
         integer(ESMF_KIND_I4)              :: NumEl
-        !> Number of nodes of each element, which is simply three in 2D ADCIRC.
+        !> \details Number of nodes of each element, which is simply three in 2D ADCIRC.
         integer(ESMF_KIND_I4)              :: NumND_per_El
-        !> Global node numbers of the nodes which are present in the current PE.
+        !> \details Global node numbers of the nodes which are present in the current PE.
         integer(ESMF_KIND_I4), allocatable :: NdIDs(:)
-        !> Global element numbers which are present in the current PE.
+        !> \details Global element numbers which are present in the current PE.
         integer(ESMF_KIND_I4), allocatable :: ElIDs(:)
-        !> The element connectivity array, for the present elements in the current PE.
+        !> \details The element connectivity array, for the present elements in the current PE.
         !! The node numbers are the local numbers of the present nodes. All the element
         !! connectivities are arranged in this one-dimensional array.
         integer(ESMF_KIND_I4), allocatable :: ElConnect(:)
-        !> The number of the PE's which own each of the nodes present this PE.
+        !> \details The number of the PE's which own each of the nodes present this PE.
         !! This number is zero-based.
         integer(ESMF_KIND_I4), allocatable :: NdOwners(:)
-        !>
+        !> \details An array containing the element types, which are all triangles in our
+        !! application.
         integer(ESMF_KIND_I4), allocatable :: ElTypes(:)
-        !> This is an array, which maps the indices of the owned nodes to the indices of the present
+        !> \details This is an array, which maps the indices of the owned nodes to the indices of the present
         !! nodes. For example, assume we are on <tt>PE = 1</tt>, and we have four nodes present, and the
         !! first and third nodes belong to <tt>PE = 0</tt>. So we have:
         !! \code
@@ -302,23 +303,6 @@ contains
             '</Cells>'
 
         write(unit=1014, fmt="(A A)") repeat(" ",indent), &
-            '<PointData Scalars="scalars">'
-        indent = indent + 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
-            '<DataArray type="Float32" Name="bathymetry" NumberOfComponents="1" Format="ascii">'
-        indent = indent + 2
-        do i1 = 1, the_data%NumNd, 1
-            write(unit=1014, fmt="(A F0.4)") repeat(" ",indent), &
-                the_data%bathymetry(i1)
-        end do
-        indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
-            '</DataArray>'
-        indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
-            '</PointData>'
-
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
             '<CellData Scalars="scalars">'
         indent = indent + 2
         write(unit=1014, fmt="(A A)") repeat(" ",indent), &
@@ -333,7 +317,25 @@ contains
         indent = indent - 2
         write(unit=1014, fmt="(A A)") repeat(" ",indent), &
             '</CellData>'
+
+        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            '<PointData Scalars="scalars">'
+        indent = indent + 2
+        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            '<DataArray type="Float32" Name="bathymetry" NumberOfComponents="1" Format="ascii">'
+        indent = indent + 2
+        do i1 = 1, the_data%NumNd, 1
+            write(unit=1014, fmt="(A F0.4)") repeat(" ",indent), &
+                the_data%bathymetry(i1)
+        end do
+        indent = indent - 2
+        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+            '</DataArray>'
+
         if (last_write) then
+            indent = indent - 2
+            write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+                '</PointData>'
             indent = indent - 2
             write(unit=1014, fmt="(A A)") repeat(" ",indent), &
                 '</Piece>'
@@ -357,12 +359,10 @@ contains
         logical, intent(in)            :: last_write
         real(ESMF_KIND_R8), intent(in) :: field_array(:)
         integer                        :: i1, indent, num_recs
-        indent = 6
         open(unit=1014, file=vtu_filename, form='FORMATTED', &
             position='APPEND', status='OLD', action='WRITE')
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
-            '<PointData Scalars="scalars">'
-        indent = indent + 2
+
+        indent = 8
         write(unit=1014, fmt="(A A)") repeat(" ",indent), &
             '<DataArray type="Float32" Name="'//field_name//'" NumberOfComponents="1" Format="ascii">'
         indent = indent + 2
@@ -373,10 +373,11 @@ contains
         indent = indent - 2
         write(unit=1014, fmt="(A A)") repeat(" ",indent), &
             '</DataArray>'
-        indent = indent - 2
-        write(unit=1014, fmt="(A A)") repeat(" ",indent), &
-            '</PointData>'
+
         if (last_write) then
+            indent = indent - 2
+            write(unit=1014, fmt="(A A)") repeat(" ",indent), &
+                '</PointData>'
             indent = indent - 2
             write(unit=1014, fmt="(A A)") repeat(" ",indent), &
                 '</Piece>'
@@ -440,7 +441,7 @@ contains
         real(ESMF_KIND_R8), pointer, intent(out)        :: out_fieldarray(:)
         integer, intent(in)                             :: root, num_total_nodes
         integer                                         :: send_count, localPet, petCount, &
-            i1, j1, k1, i_num, j_num1, rc, trash2, trash3
+                                                           i1, j1, k1, i_num, j_num1, rc, trash2, trash3
         integer, allocatable                            :: recv_counts(:), gather_displs(:)
         real(ESMF_KIND_R8), allocatable                 :: temp_fieldarray(:)
         character(len=6)                                :: PE_ID
@@ -513,13 +514,15 @@ end module ADCIRC_interpolation
 
 !> \mainpage
 !! ## Introduction
+!! \ref adcirc_interpolation "ADCIRC interpolation module" provides required types and
+!! functions to interpolate data between two ADCIRC meshes.
 !! We use this module to first create an object of type \ref adcirc_interpolation::meshdata
 !! "meshdata" from ADCIRC input files, and then use the created meshdata object to construct an
 !! ESMF_Mesh object. When we have two ESMF_Mesh objects, we can use them to interpolate
-!! data between two different meshes. All of this process can be either done
+!! data between them. All of this process can either be done
 !! sequentially or in parallel.
 !! ### Sequential interpolation
-!! For sequential interpolation we use the following path:
+!! For sequential interpolation we use the following procedure:
 !!   1. Use the subroutine \ref adcirc_interpolation::extract_global_data_from_fort14()
 !!      "extract_global_data_from_fort14()" to create two objects of type
 !!      \ref adcirc_interpolation::meshdata "meshdata". One of these objects is used
@@ -536,7 +539,7 @@ end module ADCIRC_interpolation
 !! ### Parallel interpolation
 !! The process is very much similar to the sequential case except in the first step we
 !! use the function \ref adcirc_interpolation::extract_parallel_data_from_mesh
-!! "extract_parallel_data_from_mesh" to extract mesh from the files <tt> fort.14, fort.18,
+!! "extract_parallel_data_from_mesh" to extract mesh data from the files <tt> fort.14, fort.18,
 !! partmesh.txt</tt>.
 !! ## Basic Usage
 !! Here, we present an example of how the module adcirc_interpolation should be used.
@@ -545,12 +548,178 @@ end module ADCIRC_interpolation
 !! is done by adcprep. The coarse mesh is used as the source mesh and the fine mesh is our
 !! destination mesh. We want to interpolate the bathymetry from the source mesh to the
 !! destination mesh.
-!! <img src="Images/coarse_mesh_subdomains.png" width=750em />
+!! <img src="Images/coarse_mesh_subdomains.png" width=600em />
 !! <div style="text-align:center; font-size:150%;">The decomposed coarse mesh, which is used as the source mesh.</div>
-!! <img src="Images/fine_mesh_subdomains.png" width=750em />
+!! <img src="Images/fine_mesh_subdomains.png" width=600em />
 !! <div style="text-align:center; font-size:150%;">The decomposed fine mesh, which is used as the destination mesh.</div>
-!! \code
+!! We use the following code for this purpose. The comments in the code make the overall
+!! procedure of our technique more clear.
+!!
+!! \code{.f90}
+!!    program main
+!!
+!!        use ESMF
+!!        use MPI
+!!        use ADCIRC_interpolation
+!!
+!!        implicit none
+!!        real(ESMF_KIND_R8), pointer                      :: src_fieldptr(:), mapped_fieldptr(:), unmapped_fieldptr(:), &
+!!            dst_maskptr(:), global_fieldptr(:)
+!!        type(ESMF_VM)                                    :: vm1
+!!        type(meshdata)                                   :: src_data, dst_data, global_src_data, global_dst_data
+!!        type(ESMF_Mesh)                                  :: src_mesh, dst_mesh
+!!        type(ESMF_Field)                                 :: src_datafield, dst_unmapped_field, dst_mapped_field, dst_mask_field
+!!        type(ESMF_RouteHandle)                           :: mapped_route_handle, unmapped_route_handle
+!!        integer                                          :: i1, rc, localPet, petCount
+!!        character(len=6)                                 :: PE_ID
+!!        character(len=:), parameter                      :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
+!!
+!!        !
+!!        ! Any program using ESMF library should start with ESMF_Initialize(...).
+!!        ! Next we get the ESMF_VM (virtual machine) and using this VM, we obtain
+!!        ! the ID of our local PE and total number of PE's in the communicator.
+!!        !
+!!        call ESMF_Initialize(vm=vm1, defaultLogFilename="test.log", &
+!!            logKindFlag=ESMF_LOGKIND_MULTI, rc=rc)
+!!        call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
+!!        write(PE_ID, "(A,I4.4)") "PE", localPet
+!!
+!!        !
+!!        ! Next, we create our meshdata objects for source and destination meshes,
+!!        ! and using those meshdata objects, we create the ESMF_Mesh objects, and
+!!        ! we write the mesh into parallel vtu outputs.
+!!        !
+!!        call extract_parallel_data_from_mesh(vm1, src_fort14_dir, src_data)
+!!        call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh)
+!!        call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
+!!        call create_parallel_esmf_mesh_from_meshdata(dst_data, dst_mesh)
+!!        call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
+!!        call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
+!!
+!!        !
+!!        ! After this point, we plan to overcome an important issue. The issue is
+!!        ! if a point in the destination mesh is outside of the source mesh, we cannot
+!!        ! use ESMF bilinear interpolation to transform our datafields. Hence, we first
+!!        ! create a mask in the destination mesh, with its values equal to zero on the
+!!        ! nodes outside of the source mesh domain, and one on the nodes which are inside
+!!        ! the source mesh. Afterwards, we use bilinear interpolation for mask=1, and
+!!        ! nearest node interpolation for mask=0. Thus, we need four ESMF_Fields:
+!!        !   1- An ESMF_Field on the source mesh, which is used for the mask creation
+!!        !      and also datafield interpolation.
+!!        !   2- An ESMF_Field on the destination mesh, which will be only used for mask
+!!        !      creation.
+!!        !   3- An ESMF_Field on the destination mesh, which will be used for interpolating
+!!        !      data on the destination points with mask=1.
+!!        !   4- An ESMF_Field on the destination mesh, which will be used for interpolating
+!!        !      data on the destination points with mask=0.
+!!        !
+!!        src_datafield = ESMF_FieldCreate(mesh=src_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
+!!        dst_mask_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
+!!        dst_mapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
+!!        dst_unmapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
+!!
+!!        !
+!!        ! This is the preferred procedure in using ESMF to get a pointer to the
+!!        ! ESMF_Field data array, and use that pointer for creating the mask, or
+!!        ! assigning the data to field.
+!!        !
+!!        call ESMF_FieldGet(src_datafield, farrayPtr=src_fieldptr, rc=rc)
+!!        call ESMF_FieldGet(dst_mask_field, farrayPtr=dst_maskptr, rc=rc)
+!!        call ESMF_FieldGet(dst_mapped_field, farrayPtr=mapped_fieldptr, rc=rc)
+!!        call ESMF_FieldGet(dst_unmapped_field, farrayPtr=unmapped_fieldptr, rc=rc)
+!!
+!!        !
+!!        ! At this section, we construct our interpolation operator (A matrix which maps
+!!        ! source values to destination values). Here, no actual interpolation will happen,
+!!        ! only the interpolation matrices will be constructed. We construct one matrix for
+!!        ! nodal points with mask=1, and one for those points with mask=0.
+!!        !
+!!        call ESMF_FieldRegridStore(srcField=src_datafield, dstField=dst_mask_field, &
+!!            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
+!!            routeHandle=mapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
+!!            rc=rc)
+!!        call ESMF_FieldRegridStore(srcField=src_datafield, dstField=dst_unmapped_field, &
+!!            unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
+!!            routeHandle=unmapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, &
+!!            rc=rc)
+!!
+!!        !
+!!        ! This is the place that we create our mask on the destination mesh. By mask,
+!!        ! we mean an array with length equal to number of nodes, whose values are equal
+!!        ! to 1 at mapped nodes and 0 on unmapped nodes.
+!!        !
+!!        src_fieldptr = 1.d0
+!!        call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_mask_field, &
+!!            routehandle=mapped_route_handle, rc=rc)
+!!
+!!        !
+!!        ! As a test for our interpolation, we use the bathymetry in the source mesh as our
+!!        ! field to be inerpolated and add 1.d4 to its values at different points. Next, we
+!!        ! interpoalte, source field to destination field.
+!!        !
+!!        do i1 = 1, src_data%NumOwnedNd, 1
+!!            src_fieldptr(i1) = src_data%bathymetry(src_data%owned_to_present_nodes(i1)) + 1.d4
+!!        end do
+!!        call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_mapped_field, &
+!!            routeHandle=mapped_route_handle, rc=rc)
+!!        print *, "mapped regriding: ", rc
+!!        call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_unmapped_field, &
+!!            routeHandle=unmapped_route_handle, rc=rc)
+!!        print *, "unmapped regriding: ", rc
+!!        do i1 = 1, dst_data%NumOwnedND, 1
+!!            if (abs(dst_maskptr(i1)) < 1.d-8) then
+!!                mapped_fieldptr(i1) = unmapped_fieldptr(i1)
+!!            end if
+!!        end do
+!!
+!!        !
+!!        ! Finally, we want to visualize our results. This is not required in actual usage.
+!!        ! We only do this for our presentation. So we write two meshes in the PE=0, and
+!!        ! gather the interpolated field in PE=0. Then we plot these into vtu output.
+!!        !
+!!        if (localPet == 0) then
+!!            call extract_global_data_from_fort14("coarse/fort.14", global_src_data)
+!!            call write_meshdata_to_vtu(global_src_data, "coarse/global_mesh.vtu", .true.)
+!!            call extract_global_data_from_fort14("fine/fort.14", global_dst_data)
+!!            call write_meshdata_to_vtu(global_dst_data, "fine/global_mesh.vtu", .false.)
+!!        end if
+!!        call gather_datafield_on_root(vm1, mapped_fieldptr, 0, global_dst_data%NumNd, &
+!!            global_fieldptr)
+!!        if (localPet == 0) then
+!!            call write_node_field_to_vtu(global_fieldptr, "interp_bath", "fine/global_mesh.vtu", .true.)
+!!        end if
+!!
+!!        !
+!!        ! Finally, we have to release the memory.
+!!        !
+!!        if (localPet == 0) then
+!!            deallocate(global_fieldptr)
+!!            call destroy_meshdata(global_dst_data)
+!!            call destroy_meshdata(global_src_data)
+!!        end if
+!!        call ESMF_FieldRegridRelease(mapped_route_handle)
+!!        call ESMF_FieldRegridRelease(unmapped_route_handle)
+!!        call ESMF_FieldDestroy(src_datafield)
+!!        call ESMF_FieldDestroy(dst_mask_field)
+!!        call ESMF_FieldDestroy(dst_mapped_field)
+!!        call ESMF_FieldDestroy(dst_unmapped_field)
+!!        call ESMF_MeshDestroy(dst_mesh)
+!!        call ESMF_MeshDestroy(src_mesh)
+!!        call destroy_meshdata(src_data)
+!!        call destroy_meshdata(dst_data)
+!!
+!!        call ESMF_Finalize()
+!!
+!!    end program main
 !! \endcode
+!!
+!! Using this code, we obtain the following results:
+!! <img src="Images/coarse_bath_plus_10000.png" width=750em />
+!! <div style="text-align:center; font-size:150%;">Original data (bathymetry + 10000.) on the coarse mesh.</div>
+!! <img src="Images/fine_bath_plus_10000.png" width=750em />
+!! <div style="text-align:center; font-size:150%;">Original data (bathymetry + 10000.) on the fine mesh.</div>
+!! <img src="Images/interp_bath_plus_10000.png" width=750em />
+!! <div style="text-align:center; font-size:150%;">Interpolated bathymetry from coarse to fine mesh.</div>
 !!
 program main
 
@@ -559,27 +728,32 @@ program main
     use ADCIRC_interpolation
 
     implicit none
-    real(ESMF_KIND_R8), pointer                      :: mapped_field_ptr(:), unmapped_field_ptr(:), dst_maskptr(:), global_datafield(:)
+    real(ESMF_KIND_R8), pointer                      :: src_fieldptr(:), mapped_fieldptr(:), unmapped_fieldptr(:), &
+                                                        dst_maskptr(:), global_fieldptr(:)
     type(ESMF_VM)                                    :: vm1
     type(meshdata)                                   :: src_data, dst_data, global_src_data, global_dst_data
     type(ESMF_Mesh)                                  :: src_mesh, dst_mesh
-    type(ESMF_Field)                                 :: src_field, dst_unmapped_field, dst_mapped_field, src_mask_field, dst_mask_field
+    type(ESMF_Field)                                 :: src_datafield, dst_unmapped_field, dst_mapped_field, dst_mask_field
     type(ESMF_RouteHandle)                           :: mapped_route_handle, unmapped_route_handle
-    integer                                          :: i1, j1, k1, rc, localPet, petCount, i_num, j_num1, j_num2, send_count, trash2, trash3
-    real(ESMF_KIND_R8), pointer                      :: global_field_on_root(:), sorted_global_field(:)
-    integer(ESMF_KIND_I4), allocatable               :: int_dst_mask0(:), int_dst_mask1(:), &
-                                                        subdomain_ID(:), recv_counts(:), gather_displs(:)
-    real(ESMF_KIND_R8), allocatable                  :: src_field_array(:), mask_creator(:)
+    integer                                          :: i1, rc, localPet, petCount
     character(len=6)                                 :: PE_ID
-    character(len=4)                                 :: trash1
-
     character(len=:), parameter                      :: src_fort14_dir = "coarse/", dst_fort14_dir = "fine/"
 
+    !
+    ! Any program using ESMF library should start with ESMF_Initialize(...).
+    ! Next we get the ESMF_VM (virtual machine) and using this VM, we obtain
+    ! the ID of our local PE and total number of PE's in the communicator.
+    !
     call ESMF_Initialize(vm=vm1, defaultLogFilename="test.log", &
         logKindFlag=ESMF_LOGKIND_MULTI, rc=rc)
     call ESMF_VMGet(vm=vm1, localPet=localPet, petCount=petCount, rc=rc)
     write(PE_ID, "(A,I4.4)") "PE", localPet
 
+    !
+    ! Next, we create our meshdata objects for source and destination meshes,
+    ! and using those meshdata objects, we create the ESMF_Mesh objects, and
+    ! we write the mesh into parallel vtu outputs.
+    !
     call extract_parallel_data_from_mesh(vm1, src_fort14_dir, src_data)
     call create_parallel_esmf_mesh_from_meshdata(src_data, src_mesh)
     call extract_parallel_data_from_mesh(vm1, dst_fort14_dir, dst_data)
@@ -587,76 +761,117 @@ program main
     call write_meshdata_to_vtu(src_data, PE_ID//"_src_mesh.vtu", .true.)
     call write_meshdata_to_vtu(dst_data, PE_ID//"_dst_mesh.vtu", .true.)
 
+    !
+    ! After this point, we plan to overcome an important issue. The issue is
+    ! if a point in the destination mesh is outside of the source mesh, we cannot
+    ! use ESMF bilinear interpolation to transform our datafields. Hence, we first
+    ! create a mask in the destination mesh, with its values equal to zero on the
+    ! nodes outside of the source mesh domain, and one on the nodes which are inside
+    ! the source mesh. Afterwards, we use bilinear interpolation for mask=1, and
+    ! nearest node interpolation for mask=0. Thus, we need four ESMF_Fields:
+    !   1- An ESMF_Field on the source mesh, which is used for the mask creation
+    !      and also datafield interpolation.
+    !   2- An ESMF_Field on the destination mesh, which will be only used for mask
+    !      creation.
+    !   3- An ESMF_Field on the destination mesh, which will be used for interpolating
+    !      data on the destination points with mask=1.
+    !   4- An ESMF_Field on the destination mesh, which will be used for interpolating
+    !      data on the destination points with mask=0.
+    !
+    src_datafield = ESMF_FieldCreate(mesh=src_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
+    dst_mask_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
+    dst_mapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
+    dst_unmapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
+
+    !
+    ! This is the preferred procedure in using ESMF to get a pointer to the
+    ! ESMF_Field data array, and use that pointer for creating the mask, or
+    ! assigning the data to field.
+    !
+    call ESMF_FieldGet(src_datafield, farrayPtr=src_fieldptr, rc=rc)
+    call ESMF_FieldGet(dst_mask_field, farrayPtr=dst_maskptr, rc=rc)
+    call ESMF_FieldGet(dst_mapped_field, farrayPtr=mapped_fieldptr, rc=rc)
+    call ESMF_FieldGet(dst_unmapped_field, farrayPtr=unmapped_fieldptr, rc=rc)
+
+    !
+    ! At this section, we construct our interpolation operator (A matrix which maps
+    ! source values to destination values). Here, no actual interpolation will happen,
+    ! only the interpolation matrices will be constructed. We construct one matrix for
+    ! nodal points with mask=1, and one for those points with mask=0.
+    !
+    call ESMF_FieldRegridStore(srcField=src_datafield, dstField=dst_mask_field, &
+        unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
+        routeHandle=mapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
+        rc=rc)
+    call ESMF_FieldRegridStore(srcField=src_datafield, dstField=dst_unmapped_field, &
+        unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
+        routeHandle=unmapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, &
+        rc=rc)
+
+    !
+    ! This is the place that we create our mask on the destination mesh. By mask,
+    ! we mean an array with length equal to number of nodes, whose values are equal
+    ! to 1 at mapped nodes and 0 on unmapped nodes.
+    !
+    src_fieldptr = 1.d0
+    call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_mask_field, &
+        routehandle=mapped_route_handle, rc=rc)
+
+    !
+    ! As a test for our interpolation, we use the bathymetry in the source mesh as our
+    ! field to be inerpolated and add 1.d4 to its values at different points. Next, we
+    ! interpoalte, source field to destination field.
+    !
+    do i1 = 1, src_data%NumOwnedNd, 1
+        src_fieldptr(i1) = src_data%bathymetry(src_data%owned_to_present_nodes(i1)) + 1.d4
+    end do
+    call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_mapped_field, &
+        routeHandle=mapped_route_handle, rc=rc)
+    print *, "mapped regriding: ", rc
+    call ESMF_FieldRegrid(srcField=src_datafield, dstField=dst_unmapped_field, &
+        routeHandle=unmapped_route_handle, rc=rc)
+    print *, "unmapped regriding: ", rc
+    do i1 = 1, dst_data%NumOwnedND, 1
+        if (abs(dst_maskptr(i1)) < 1.d-8) then
+            mapped_fieldptr(i1) = unmapped_fieldptr(i1)
+        end if
+    end do
+
+    !
+    ! Finally, we want to visualize our results. This is not required in actual usage.
+    ! We only do this for our presentation. So we write two meshes in the PE=0, and
+    ! gather the interpolated field in PE=0. Then we plot these into vtu output.
+    !
     if (localPet == 0) then
         call extract_global_data_from_fort14("coarse/fort.14", global_src_data)
         call write_meshdata_to_vtu(global_src_data, "coarse/global_mesh.vtu", .true.)
         call extract_global_data_from_fort14("fine/fort.14", global_dst_data)
         call write_meshdata_to_vtu(global_dst_data, "fine/global_mesh.vtu", .false.)
     end if
-
-    allocate(mask_creator(src_data%NumOwnedNd))
-    mask_creator = 1.d0
-    src_mask_field = ESMF_FieldCreate(mesh=src_mesh, farray=mask_creator, &
-        indexFlag=ESMF_INDEX_DELOCAL, rc=rc)
-    dst_mask_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
-    call ESMF_FieldRegridStore(srcField=src_mask_field, dstField=dst_mask_field, &
-        unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-        routeHandle=mapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
-        rc=rc)
-    call ESMF_FieldRegrid(srcField=src_mask_field, dstField=dst_mask_field, &
-        routehandle=mapped_route_handle, rc=rc)
-    call ESMF_FieldGet(dst_mask_field, farrayPtr=dst_maskptr, rc=rc)
-
-    allocate(src_field_array(src_data%NumOwnedND))
-    do i1 = 1, src_data%NumOwnedNd, 1
-        src_field_array(i1) = src_data%bathymetry(src_data%owned_to_present_nodes(i1))
-    end do
-    src_field = ESMF_FieldCreate(mesh=src_mesh, farray= src_field_array, &
-        indexflag=ESMF_INDEX_DELOCAL, rc=rc)
-    dst_mapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
-    dst_unmapped_field = ESMF_FieldCreate(mesh=dst_mesh, typekind=ESMF_TYPEKIND_R8, rc=rc)
-
-    call ESMF_FieldRegridStore(srcField=src_field, dstField=dst_mapped_field, &
-        unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-        routeHandle=mapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
-        rc=rc)
-    print *, "mapped regrid store: ", rc
-    call ESMF_FieldRegridStore(srcField=src_field, dstField=dst_unmapped_field, &
-        unmappedaction=ESMF_UNMAPPEDACTION_IGNORE, &
-        routeHandle=unmapped_route_handle, regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, &
-        rc=rc)
-    print *, "unmapped regrid store: ", rc
-
-    call ESMF_FieldRegrid(srcField=src_field, dstField=dst_mapped_field, &
-        routeHandle=mapped_route_handle, rc=rc)
-    print *, "mapped regriding: ", rc
-    call ESMF_FieldGet(dst_mapped_field, farrayPtr=mapped_field_ptr, rc=rc)
-    call ESMF_FieldRegrid(srcField=src_field, dstField=dst_unmapped_field, &
-        routeHandle=unmapped_route_handle, rc=rc)
-    print *, "unmapped regriding: ", rc
-    call ESMF_FieldGet(dst_mapped_field, farrayPtr=mapped_field_ptr, rc=rc)
-    call ESMF_FieldGet(dst_unmapped_field, farrayPtr=unmapped_field_ptr, rc=rc)
-
-    j1 = 0
-    do i1 = 1, dst_data%NumOwnedND, 1
-        if (abs(dst_maskptr(i1)) < 1.d-8) then
-            mapped_field_ptr(i1) = unmapped_field_ptr(i1)
-        end if
-    end do
-
-    call gather_datafield_on_root(vm1, mapped_field_ptr, 0, global_dst_data%NumNd, &
-        global_datafield)
+    call gather_datafield_on_root(vm1, mapped_fieldptr, 0, global_dst_data%NumNd, &
+        global_fieldptr)
     if (localPet == 0) then
-        call write_node_field_to_vtu(global_datafield, "interp_bath", "fine/global_mesh.vtu", .true.)
+        call write_node_field_to_vtu(global_fieldptr, "interp_bath", "fine/global_mesh.vtu", .true.)
     end if
 
-    !deallocate(mapped_field_ptr)
-    !call ESMF_FieldDestroy(src_field)
-
-    !call ESMF_MeshDestroy(src_mesh)
+    !
+    ! Finally, we have to release the memory.
+    !
+    if (localPet == 0) then
+        deallocate(global_fieldptr)
+        call destroy_meshdata(global_dst_data)
+        call destroy_meshdata(global_src_data)
+    end if
+    call ESMF_FieldRegridRelease(mapped_route_handle)
+    call ESMF_FieldRegridRelease(unmapped_route_handle)
+    call ESMF_FieldDestroy(src_datafield)
+    call ESMF_FieldDestroy(dst_mask_field)
+    call ESMF_FieldDestroy(dst_mapped_field)
+    call ESMF_FieldDestroy(dst_unmapped_field)
+    call ESMF_MeshDestroy(dst_mesh)
+    call ESMF_MeshDestroy(src_mesh)
     call destroy_meshdata(src_data)
-    !call ESMF_MeshDestroy(dst_mesh)
-    !call destroy_meshdata(dst_data)
+    call destroy_meshdata(dst_data)
 
     call ESMF_Finalize()
 
